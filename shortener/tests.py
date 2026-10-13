@@ -1,4 +1,4 @@
-from django.test import TestCase, override_settings
+from django.test import override_settings
 from django.urls import reverse
 from django.core.cache import cache
 from django.db import transaction
@@ -7,7 +7,8 @@ from django.db import IntegrityError
 from shortener.models import ShortURL, ClickAnalytics, generate_short_code
 from unittest.mock import patch
 import json
-
+from django.contrib.auth.models import User
+from rest_framework.test import APITestCase
 
 # Use locmem (in-memory) cache for fast, isolated test execution without requiring a running Redis instance
 @override_settings(CACHES={
@@ -15,12 +16,19 @@ import json
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     }
 })
-class URLShortenerTests(TestCase):
+class URLShortenerTests(APITestCase):
 
     def setUp(self):
         cache.clear()
         self.original_url = "https://example.com/long-path/page.html"
         self.short_url_obj = ShortURL.objects.create(original_url=self.original_url)
+        self.admin_user = User.objects.create_superuser(
+            username="adminbot",
+            email="bot@gmail.com",
+            password="securepassword"
+            )
+        
+        self.client.force_authenticate(user=self.admin_user)
 
     def test_short_code_generation(self):
         """Test that ensure the ganerated short code have 6 characters."""
@@ -161,15 +169,15 @@ class URLShortenerTests(TestCase):
         url = reverse('create_short_url')
         responses = []
 
-        for request_number in range(6):
+        for request_number in range(11):
             responses.append(self.client.post(
                 url,
                 data=json.dumps({'url': f'https://example.com/{request_number}'}),
                 content_type='application/json'
             ))
 
-        self.assertEqual([response.status_code for response in responses[:5]], [201] * 5)
-        self.assertEqual(responses[5].status_code, 429)
+        self.assertEqual([response.status_code for response in responses[:10]], [201] * 10)
+        self.assertEqual(responses[10].status_code, 429)
 
     def test_create_short_url_api_invalid_json(self):
         """Checks the api handle the bad request and json"""
@@ -261,7 +269,6 @@ class URLShortenerTests(TestCase):
         latest_analytics = ClickAnalytics.objects.filter(short_url=self.short_url_obj).first()
         self.assertEqual(latest_analytics.user_agent, 'TestAgent/1.0')
         self.assertEqual(latest_analytics.referrer, 'https://google.com')
-
 
     def test_cache_is_invalidated_when_url_is_deactivated(self):
         cache_key = f"url:{self.short_url_obj.short_code}"

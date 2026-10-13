@@ -12,6 +12,8 @@ from .cache import get_url_cache_key
 
 from .models import ShortURL, ClickAnalytics
 from .serializers import ShortURLSerializer
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser
 
 CACHE_TTL = 60 * 60 * 24  #cache time limit 24 hrs in sec.
 MAX_CREATE_ATTEMPTS = 5
@@ -19,9 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
-@authentication_classes([])
-@permission_classes([AllowAny])
 
+@permission_classes([IsAdminUser])
 
 def create_short_url(request):
     """
@@ -113,7 +114,6 @@ def create_short_url(request):
         'short_url': full_short_url
     },status=(status.HTTP_201_CREATED if is_created else status.HTTP_200_OK),
     )
-
 
 def redirect_url(request, short_code):
     """
